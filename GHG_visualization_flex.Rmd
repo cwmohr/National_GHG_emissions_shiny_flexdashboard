@@ -1,0 +1,116 @@
+---
+title: "Greenhouse Gas for Annex I countries"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: row
+    vertical_layout: fill
+    theme: paper
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(knitr)
+library(cowplot)
+library(ggrepel)
+library(ggspatial)
+library(sf)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+
+```{r}
+## Load in GHG data
+AnnexI_GHG.df <- readRDS("data/AnnexI_Country_GHG_Inventory.rds")
+
+## Clean-up GHG data
+AnnexI_GHG.df <- AnnexI_GHG.df %>% 
+  filter(!lg.main.sector, !grepl(pattern = "European Union", country)) %>% 
+  rename(IPCC_category = sector, sector = main.sector)
+```
+
+
+Row {data-height=680}
+-----------------------------------------------------------------------
+
+
+### World map of mean GHG emissions per capita (1990 - 2018)
+
+```{r echo=FALSE, fig.height=5}
+
+## Aggregate GHG data
+country.AnnexI_GHG.df <- AnnexI_GHG.df %>% 
+  group_by(year, country.code, country) %>% 
+  summarise(emission.GtCO2eq = sum(emission.ktCO2eq, na.rm = TRUE)/1E6) %>%
+  group_by(country.code) %>% 
+  summarise(emission.GtCO2eq = mean(emission.GtCO2eq)) %>% 
+  ungroup() %>% 
+  rename(gu_a3 = country.code)
+  
+## Produce world map
+world.sf <- ne_countries(scale = 'medium', returnclass = "sf")
+#class(world.sf)
+## Merge GHG dataset with world map
+GHG.world.sf <- merge(world.sf, country.AnnexI_GHG.df, all = TRUE)
+
+
+## Calculate emissions per capita  
+GHG.world.sf <- GHG.world.sf %>% 
+  mutate(pop_est = as.numeric(pop_est),
+         emission.tCO2eq.per.cap = (emission.GtCO2eq*1E9)/pop_est)
+
+## Plot map
+ggplot(aes(fill = emission.tCO2eq.per.cap), data = GHG.world.sf)+
+  geom_sf(na.rm = FALSE)+
+  scale_fill_distiller("tCO2eq per capita", palette = "YlOrRd", direction = 1)+
+  theme_void()+
+  theme(legend.position = "bottom",
+        plot.margin = margin(t = -9, r = 0, b = -5, l = 0, unit = "pt"))+
+  guides(fill = guide_colorbar(barwidth = unit(7, "cm")))
+  
+
+```
+
+
+
+
+### Annual GHG emissions
+
+```{r}
+## Produce bar plot 
+AnnexI_GHG.df %>% 
+  group_by(sector, year) %>% 
+  summarise(emission.GtCO2eq = sum(emission.ktCO2eq, na.rm = TRUE)/1E6) %>% 
+  ggplot(aes(x = year, y = emission.GtCO2eq, fill = sector))+
+  geom_col(colour = "black")+
+  labs(y = "net emissions (Gt CO2eq)")+
+  scale_x_continuous(breaks = seq(1990, 2018, 2))+
+  scale_y_continuous(n.breaks = 20)+
+  scale_fill_brewer(palette = "Pastel1")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.9),
+        legend.position = "bottom",
+        aspect.ratio = 0.6,
+        plot.margin = margin(t = -9, r = 0, b = -5, l = 0, unit = "pt"))+
+  guides(fill=guide_legend(nrow=2, byrow=TRUE))
+```
+
+
+Row {data-height=320}
+-----------------------------------------------------------------------
+
+
+### Table of total GHG emissions (Gt CO2eq) by sector
+
+```{r}
+## Produce table
+AnnexI_GHG.df %>%
+  group_by(sector, year) %>%
+  summarise(emission.GtCO2eq = sum(emission.ktCO2eq, na.rm = TRUE)/1E6) %>%
+  spread(year, emission.GtCO2eq) %>%
+  kable(digits = 2)
+```
+
