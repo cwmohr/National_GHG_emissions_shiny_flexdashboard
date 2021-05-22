@@ -1,2 +1,2 @@
 # National_GHG_emissions_shiny_flexdashboard
-Shiny flexdashboard application for exploring GHG emissions from different nations
+Demonstration of building a shiny flexdashboard application using UNFCCC GHG emission data.
